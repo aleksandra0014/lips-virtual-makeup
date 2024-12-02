@@ -6,9 +6,15 @@ from PIL import Image, ImageTk, ImageDraw
 from model_Unet import UNET
 import os
 from datetime import datetime
+from tkinter import colorchooser
+import random 
+import tkinter as tk
 
 def rgb_to_hex(rgb):
     return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+def bgr_to_hex(bgr):
+    return f"#{bgr[2]:02x}{bgr[1]:02x}{bgr[0]:02x}"
 
 class WelcomeScreen(ctk.CTk):
     def __init__(self, on_continue_callback):
@@ -62,38 +68,177 @@ class WelcomeScreen(ctk.CTk):
         self.destroy()
 
     def center_window(self, width, height):
-        """
-        Wyśrodkowanie okna na ekranie.
-        """
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         x = (screen_width - width) // 2
         y = (screen_height - height) // 2
         self.geometry(f"{width}x{height}+{x}+{y}")
 
+
+class EndScreen(ctk.CTk):
+    def __init__(self, color='red'):
+        super().__init__()
+        self.title("Chosen Lipstick!")
+        self.geometry("600x500")
+        self.center_window(650, 500)
+        self.color = bgr_to_hex(tuple(color))
+
+        self.current_frame = None
+
+        # canvas is needed for confetti
+        self.canvas = tk.Canvas(self, bg="#1a1a1a", highlightthickness=0)  
+        self.canvas.pack(fill="both", expand=True)
+
+        
+        hurra_label = ctk.CTkLabel(
+            self,
+            text="Your dream lipstick color!",
+            font=("Lucida Handwriting", 20),
+            text_color="white",
+            justify="center"
+        )
+        hurra_label.pack(pady=20)
+
+        # button - circle with choosed color
+        main_button = ctk.CTkButton(
+            self,
+            text="",
+            width=200,
+            height=200,
+            corner_radius=100,
+            fg_color=self.color,
+            text_color="white"
+        )
+        main_button.pack(pady=10)
+
+        # buttons
+        bottom_frame = ctk.CTkFrame(self, fg_color="transparent")
+        bottom_frame.pack(fill="x", pady=10)
+
+        quit_button = ctk.CTkButton(
+            bottom_frame,
+            text="Exit",
+            width=100,
+            height=50,
+            corner_radius=10,
+            fg_color="#7b1414",
+            text_color="white",
+            command=self.close
+        )
+        quit_button.pack(side="right", padx=10)
+
+        back_button = ctk.CTkButton(
+            bottom_frame,
+            text="Back",
+            width=100,
+            height=50,
+            corner_radius=10,
+            fg_color="grey",
+            text_color="white",
+            command=self.back
+        )
+        back_button.pack(side="left", padx=10)
+
+        save_button = ctk.CTkButton(
+            bottom_frame,
+            text="Save",
+            width=100,
+            height=50,
+            corner_radius=10,
+            fg_color='black', #"#ff39b3",
+            text_color="white",
+            command=lambda: self.save_color(color)
+        )
+        save_button.pack(side="top", padx=10)
+
+        # generate confetti
+        self.after(100, self.generate_confetti)
+
+    def close(self):
+        self.destroy()
+    
+    # function for going back to main app
+    def back(self):
+        self.destroy()
+        app = MaskApp(model_path=model_path)
+        app.mainloop()
+
+    def center_window(self, width, height):
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
+
+    def generate_confetti(self):
+        self.update_idletasks()  
+        width = self.winfo_width()
+        height = self.winfo_height()
+
+        for _ in range(100):  # Liczba cząsteczek konfetti
+            x = random.randint(0, width)  # Pozycja startowa X
+            y = random.randint(-300, 0)  # Start powyżej okna
+            size = random.randint(7, 15)  # Rozmiar konfetti
+            color = random.choice(["#FFFFFF", "#FFC0CB", "#FF69B4", "#FF1493", "#FF0000"])
+            self.animate_confetti(x, y, size, color)
+
+    def animate_confetti(self, x, y, size, color):
+        confetti = self.canvas.create_oval(x, y, x + size, y + size, fill=color, outline="")
+        def move():
+            nonlocal y
+            y += random.randint(5, 10)  # Szybkość spadania
+            x_offset = random.randint(-2, 2)  # Lekki ruch na boki
+            self.canvas.move(confetti, x_offset, random.randint(5, 10))  # Poruszanie w dół i lekko w bok
+            if y < self.winfo_height():  
+                self.after(50, move)
+            else:
+                self.canvas.delete(confetti)  
+        move()
+
+    # function for saving choosed color 
+    def save_color(self, color):
+        folder = "colors"
+        os.makedirs(folder, exist_ok=True)  
+        timestamp = datetime.now().strftime("%Y%m%d")
+        filename = f"colors_{timestamp}.txt"
+        filepath = os.path.join(folder, filename)
+        with open(filepath, 'a') as f:
+            f.write(f"{color}\n")
+        print(f"Color saved to {filepath}")
+
+
 class MaskApp(ctk.CTk):
     def __init__(self, model_path, color=[39, 2, 255], device='cpu'):
         super().__init__()
-        self.title("Mask Application with CustomTkinter")
-        self.geometry("700x550")
-        self.color = color
-        self.device = device
+        self.title("Onllipstick app")
+        self.geometry("700x600")
+        self.center_window(700, 600)
         self.desired_size = 256
-        self.alpha = 0.3  
-        self.video_paused = False  
 
+        self.video_paused = False  
+        self.device = device
         self.model = torch.load(model_path, map_location=device)
         self.model = self.model.to(device)
         self.model.eval()
 
+        self.color = color
+        self.alpha = 0.3 
+
         self.cap = cv2.VideoCapture(0)
         self.current_frame = None  
 
-        
+        # Logo 
+        self.logo_image = Image.open("logo2.png")  
+        self.logo_image = self.logo_image.resize((400, 200))  
+        self.logo_photo = ImageTk.PhotoImage(self.logo_image)
+        self.logo_label = ctk.CTkLabel(self, image=self.logo_photo, text="")
+        self.logo_label.grid(row=0, column=1, columnspan=2, pady=(10,0))
+
+        # Video
         self.video_label = ctk.CTkLabel(self, text="")
         self.video_label.grid(row=5, column=0, padx=40, pady=30)
 
-        
+        # Buttons
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
         button_frame.grid(row=7, column=0, pady=10)  
 
@@ -110,7 +255,7 @@ class MaskApp(ctk.CTk):
 
         self.pause_button = ctk.CTkButton(
             button_frame,
-            text="Pause/Resume Video",
+            text="Pause Video",
             fg_color='black',
             width=120,
             height=50,
@@ -121,21 +266,64 @@ class MaskApp(ctk.CTk):
 
         self.quit_button = ctk.CTkButton(
             self,
-            text="Quit",
+            text="Exit",
             width=90,
             height=45,
-            fg_color='grey',
+            fg_color='#7b1414',
             corner_radius=10,
             command=self.close
         )
-        self.quit_button.grid(row=8, column=0, padx=10, pady=10)  
+        self.quit_button.grid(row=8, column=1, padx=10, pady=10) 
 
-        # self.slider_label = ctk.CTkLabel(
-        #     self, 
-        #     text="Jak mocny kolor?",  # Tekst etykiety
-        #     font=("Arial", 14)  # Opcjonalnie zmień czcionkę i rozmiar
-        # )
-        # self.slider_label.grid(row=8, column=1, padx=10, pady=5)  # Umieszczenie etykiety
+        button_frame2 = ctk.CTkFrame(self, fg_color="transparent")
+        button_frame2.grid(row=8, column=0, pady=10)  
+
+        self.custom_color_button = ctk.CTkButton(
+            button_frame2,
+            text="I don't like this colors!",
+            fg_color='#9b004a',
+            width=150,
+            height=50,
+            corner_radius=10,
+            command=self.open_color_palette,
+            font=('Open Sans',10)
+        )
+        self.custom_color_button.grid(row=0, column=0, padx=5, pady=5)
+
+        self.custom_color_button = ctk.CTkButton(
+            button_frame2,
+            text="This is the perfect one!",
+            fg_color='#e1026c',
+            width=150,
+            height=50,
+            corner_radius=10,
+            command=self.open_end_widnow, 
+            font=('Open Sans',10)
+        )
+        self.custom_color_button.grid(row=0, column=2, padx=5, pady=5)
+
+        # Colors Buttons
+        color_frame = ctk.CTkFrame(self, fg_color="transparent")
+        color_frame.grid(row=3, column=1, rowspan=4, padx=10, pady=10)
+
+        def change_color(color):
+            self.color = color
+
+        colors = [
+            (200, 3, 200), (84, 7, 16), (219, 86, 139),
+            (186, 11, 49), (33, 5, 5), (230, 138, 203),
+            (99, 39, 52), (219, 68, 57), (207, 31, 69)
+        ]
+        for idx, color in enumerate(colors):
+            ctk.CTkButton(
+                color_frame,  
+                text=f"{idx}",
+                fg_color=rgb_to_hex(color),
+                width=60,
+                height=60,
+                corner_radius=30,
+                command=lambda c=color: change_color([c[2], c[1], c[0]])
+            ).grid(row=idx // 3, column=idx % 3, padx=5, pady=5) 
 
         # Alpha slider
         self.alpha_slider = ctk.CTkSlider(
@@ -148,33 +336,23 @@ class MaskApp(ctk.CTk):
             button_color='red'
         )
         self.alpha_slider.set(self.alpha)  
-        self.alpha_slider.grid(row=7, column=1, padx=20, pady=10)
+        self.alpha_slider.grid(row=7, column=1, padx=10, pady=5)
 
-        color_frame = ctk.CTkFrame(self, fg_color="transparent")
-        color_frame.grid(row=5, column=1, rowspan=4, padx=10, pady=10)
-
-        # Buttons for changing color
-        def change_color(color):
-            self.color = color
-
-        colors = [
-            (200, 3, 200), (84, 7, 16), (219, 86, 139),
-            (186, 11, 49), (33, 5, 5), (230, 138, 203),
-            (99, 39, 52), (219, 68, 57), (207, 31, 69)
-        ]
-        for idx, color in enumerate(colors):
-            ctk.CTkButton(
-                color_frame,  # Użycie kontenera jako rodzica
-                text=f"{idx}",
-                fg_color=rgb_to_hex(color),
-                width=60,
-                height=60,
-                corner_radius=30,
-                command=lambda c=color: change_color([c[2], c[1], c[0]])
-            ).grid(row=idx // 3, column=idx % 3, padx=5, pady=5) 
-
-        # Start updating video
         self.update_video()
+
+    def open_color_palette(self):
+        color_code = colorchooser.askcolor(title="Wybierz kolor szminki")[0]
+        if color_code:  
+            r, g, b = map(int, color_code)
+            self.color = [b, g, r]  
+            print(f"Wybrany kolor: RGB({r}, {g}, {b})")
+
+    def center_window(self, width, height):
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
 
     def update_video(self):
         if not self.video_paused:
@@ -196,13 +374,12 @@ class MaskApp(ctk.CTk):
                 frame[y_start:y_end, x_start:x_end] = masked_image
 
                 # Convert frame to RGB and update the video label
-                self.current_frame = frame.copy()  # Store the current frame
+                self.current_frame = frame.copy() 
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = ImageTk.PhotoImage(Image.fromarray(frame_rgb))
                 self.video_label.configure(image=img)
                 self.video_label.image = img
 
-        # Schedule the next frame update
         self.after(10, self.update_video)
 
     def set_alpha(self, value):
@@ -214,14 +391,12 @@ class MaskApp(ctk.CTk):
 
     def save_photo(self):
         if self.current_frame is not None:
-            # Generate a unique filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"photo_{timestamp}.png"
             folder = "photos"
-            os.makedirs(folder, exist_ok=True)  # Create the folder if it doesn't exist
+            os.makedirs(folder, exist_ok=True)  
             filepath = os.path.join(folder, filename)
 
-            # Save the current frame
             cv2.imwrite(filepath, self.current_frame)
             print(f"Photo saved: {filepath}")
 
@@ -239,7 +414,6 @@ class MaskApp(ctk.CTk):
         return output_image
 
     def preprocess_img_from_frame(self, frame):
-        # Resize and normalize image
         frame = cv2.resize(frame, (256, 256))
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = torch.as_tensor(frame, dtype=torch.float) / 255.0
@@ -248,9 +422,9 @@ class MaskApp(ctk.CTk):
 
     def get_mask_on_photo(self, img, pred, color, alpha):
         mask = np.zeros_like(img)
-        mask[:, :, 0] = pred[:, :, 0] * color[0]
-        mask[:, :, 1] = pred[:, :, 0] * color[1]
-        mask[:, :, 2] = pred[:, :, 0] * color[2]
+        mask[:, :, 0] = pred[:, :, 0] * color[0]  # Kanał R
+        mask[:, :, 1] = pred[:, :, 0] * color[1]  # Kanał G
+        mask[:, :, 2] = pred[:, :, 0] * color[2]  # Kanał B
 
         masked_image = img.copy()
         mask_indices = pred[:, :, 0] > 0
@@ -265,17 +439,20 @@ class MaskApp(ctk.CTk):
             ).astype(np.uint8)
 
         return masked_image
-
+    
     def close(self):
         self.cap.release()
         self.destroy()
 
+    def open_end_widnow(self):
+        self.destroy()
+        end = EndScreen(color=self.color)
+        end.mainloop()
 
-# Main function to launch the app
 if __name__ == "__main__":
     ctk.set_appearance_mode("Dark")
     ctk.set_default_color_theme("dark-blue")
-    
+
     def start_main_app():
         welcome_screen.destroy()
         app = MaskApp(model_path=model_path)
@@ -285,3 +462,4 @@ if __name__ == "__main__":
     
     welcome_screen = WelcomeScreen(on_continue_callback=start_main_app)
     welcome_screen.mainloop()
+    
