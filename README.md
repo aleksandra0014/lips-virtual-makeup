@@ -15,6 +15,9 @@ The Virtual Lipstick Try-On project focused on image processing and deep neural 
   - Pytorch (for segmentation model)
   - customtkinter (for GUI application)
   - NumPy/Pandas (for data analysis)
+ 
+## Demo 
+If you want to see how project works: https://drive.google.com/file/d/16yZjVTPLCx5sXE4H8cpWkZwUf_zX-AxJ/view?usp=sharing
 
  ```bash
   - lips-virtual-makeup/
